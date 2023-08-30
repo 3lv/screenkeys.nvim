@@ -1,21 +1,41 @@
-M = {
+local M = { }
+local config = {
 	width = 29,
 	height = 1,
+	winblend = 0,
+	special_keys = true,
+	start_on_setup = false,
+	carret_notation = false,
+	keys = {
+		["<tab>"] = "↔",
+		["<cr>"] = "⏎",
+		["<space>"] = "␣",
+		["<bs>"] = "⌫",
+		["<up>"] = "↑",
+		["<down>"] = "↓",
+		["<right>"] = "→",
+		["<left>"] = "←",
+	}
 }
+local namespace
+local augroup
+local buf
+local win
+local last_keys = {}
 
-function M.create_buf()
-	M.buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_option(M.buf, "filetype", "screenkeys")
+local function create_buf()
+	buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_option(buf, "filetype", "screenkeys")
 end
-function M.open_win()
-	if M.win ~= nil and vim.api.nvim_win_is_valid(M.win) then
+local function open_win()
+	if win ~= nil and vim.api.nvim_win_is_valid(win) then
 		return
 	end
-	if(M.buf == nil) then
-		M:create_buf()
+	if(buf == nil) then
+		create_buf()
 	end
 	-- listed = false, scratch = true
-	local options = {
+	local win_config = {
 		style = "minimal",
 		focusable = false,
 		relative = "editor",
@@ -23,110 +43,114 @@ function M.open_win()
 		zindex = 300,
 		row = 0,
 		col = vim.o.columns + 1e9,
-		width = M.width,
-		height = M.height,
+		width = config.width,
+		height = config.height,
 	}
-	M.win = vim.api.nvim_open_win(M.buf, false, options)
-	vim.api.nvim_win_set_option(M.win,  "winhighlight", "NormalFloat:ScreenKeys")
-	-- nivm_win_set_hl_ns(M.win, {ns_id})
+	win = vim.api.nvim_open_win(buf, false, win_config)
+	vim.api.nvim_win_set_option(win,  "winhighlight", "NormalFloat:ScreenKeys")
+	vim.api.nvim_win_set_option(win,  "winblend", config.winblend)
+	-- nivm_win_set_hl_ns(win, {ns_id})
 end
-function M.close_win()
-	if M.win ~= nil and vim.api.nvim_win_is_valid(M.win) then
-		vim.api.nvim_win_close(M.win, false)
+local function close_win()
+	if win ~= nil and vim.api.nvim_win_is_valid(win) then
+		vim.api.nvim_win_close(win, false)
 	end
 end
 
-
-M.cazan = {
-	["<nl>"] = "<c-j>",
-	["<tab>"] = "↔",
-	["<cr>"] = "⏎",
-	["<space>"] = "␣",
-	["scl"] = "s",
-	["<bs>"] = "⌫",
-	["<up>"] = "↑",
-	["<down>"] = "↓",
-	["<right>"] = "→",
-	["<left>"] = "←",
-}
 local function lpad(str, len, char)
 	local strlen = vim.api.nvim_strwidth(str)
 	local res = string.rep(char or " ", len - strlen) .. str
 	return res
 end
-function M.format_key(key)
+
+local transkey = {
+	["<nl>"] = "<c-j>",
+}
+local function format_key(key)
 	local key = vim.fn.keytrans(key)
 	if #key > 1 then
-		key = string.lower(key)
+		key = key:lower()
 	end
-	key = M.cazan[key] or key
-	--key = pad(key, 5)
+	key = transkey[key] or key
+	if config.special_keys then
+		key = config.keys[key] or key
+	end
 	return key
 end
 
-M.last_keys = {}
-function M.add_key(key) 
-	key = M.format_key(key)
-	table.insert(M.last_keys, key)
-	if(#M.last_keys > 20) then
-		table.remove(M.last_keys, 1)
+local function add_key(key) 
+	key = format_key(key)
+	table.insert(last_keys, key)
+	if(#last_keys > 20) then
+		table.remove(last_keys, 1)
 	end
 end
 
-function M.render()
+local function render()
 	local separator = " "
-	local line = table.concat(M.last_keys, separator)
-	while vim.api.nvim_strwidth(line) > M.width do
-		table.remove(M.last_keys, 1)
-		line = table.concat(M.last_keys, separator)
+	local line = table.concat(last_keys, separator)
+	while vim.api.nvim_strwidth(line) > config.width do
+		table.remove(last_keys, 1)
+		line = table.concat(last_keys, separator)
 	end
-	line = lpad(line, M.width)
-	vim.api.nvim_buf_set_lines(M.buf, 0, 1, false, { line })
-	M.open_win()
+	line = lpad(line, config.width)
+	vim.api.nvim_buf_set_lines(buf, 0, 1, false, { line })
+	open_win()
 end
 
-function M.callback(key)
-	M.add_key(key)
-	M.render()
+local function callback(key)
+	add_key(key)
+	render()
 end
 
-function M.setup(_)
-	if M.buf == nil or not vim.api.nvim_buf_is_valid(M.buf) then
-		M.create_buf()
+function M.start()
+	if buf == nil or not vim.api.nvim_buf_is_valid(buf) then
+		create_buf()
 	end
-	M.namespace = vim.api.nvim_create_namespace('ScreenKeys')
-	vim.on_key(M.callback, M.namespace)
-	M.augroup = vim.api.nvim_create_augroup('ScreenKeys', {
+	vim.on_key(callback, namespace)
+	augroup = vim.api.nvim_create_augroup('ScreenKeys', {
 		clear = true,
 	})
 	vim.api.nvim_set_hl(0, 'ScreenKeys', { link = "SpecialKey" })
 	vim.api.nvim_create_autocmd({'CursorHold', 'CursorHoldI'}, {
-		group = M.augroup,
+		group = augroup,
 		pattern = {'*'},
 		callback = function(ev)
-			M.last_keys = { }
-			M.close_win()
+			last_keys = { }
+			close_win()
 		end
 		})
 	vim.api.nvim_create_autocmd({'TabLeave'}, {
-		group = M.augroup,
+		group = augroup,
 		pattern = {'*'},
 		callback = function(ev)
-			M.close_win()
+			close_win()
 		end
 		})
 	vim.api.nvim_create_autocmd({'TabEnter'}, {
-		group = M.augroup,
+		group = augroup,
 		pattern = {'*'},
 		callback = function(ev)
-			M.open_win()
+			open_win()
 		end
 		})
 end
 
 function M.stop()
-	-- TODO clear on_key function callback from namespace M.namespace
-	vim.api.nvim_del_augroup_by_id(M.augroup)
+	vim.on_key(nil, namespace)
+	vim.api.nvim_del_augroup_by_id(augroup)
+	last_keys = { }
+	close_win()
+end
+
+function M.setup(opts)
+	config = vim.tbl_deep_extend("force", config, opts or {})
+	namespace = vim.api.nvim_create_namespace('ScreenKeys')
+	vim.api.nvim_create_user_command("KeyStart", "lua require('screenkeys').start()", { })
+	vim.api.nvim_create_user_command("KeyStop", "lua require('screenkeys').stop()", { })
+	if config.start_on_setup then
+		M.start()
+	end
 end
 
 return M
