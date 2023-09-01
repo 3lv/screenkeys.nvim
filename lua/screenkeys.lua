@@ -6,7 +6,7 @@ local config = {
 	special_keys = true,
 	start_on_setup = false,
 	carret_notation = false,
-	keys = {
+		keys = {
 		["<tab>"] = "↔",
 		["<cr>"] = "⏎",
 		["<space>"] = "␣",
@@ -65,6 +65,7 @@ end
 
 local transkey = {
 	["<nl>"] = "<c-j>",
+	["<lt>"] = "<",
 	["<esc>"] = "<c-[>",
 }
 local function format_key(key)
