@@ -65,6 +65,7 @@ end
 
 local transkey = {
 	["<nl>"] = "<c-j>",
+	["<esc>"] = "<c-[>",
 }
 local function format_key(key)
 	local key = vim.fn.keytrans(key)
